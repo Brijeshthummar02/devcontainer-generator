@@ -22,49 +22,46 @@ Here's an example of a devcontainer.json:
 // README at: https://github.com/devcontainers/templates/tree/main/src/python
 {
     "name": "Python 3 with Streamlit: Groq MoA",
-    // Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
+    // Use a prebuilt image that includes Python 3.12 and common tools
     "image": "mcr.microsoft.com/devcontainers/python:3.12-bookworm",
 
+    // Inject environment variables from local machine into container
     "containerEnv": {
         "GROQ_API_KEY": "${localEnv:GROQ_API_KEY}"
     },
 
-    // Features to add to the dev container. More info: https://containers.dev/features.
-    // "features": {},
+    // Features to install within the container environment
+    "features": {
+        "ghcr.io/devcontainers/features/python:1": {
+            "version": "3.12"
+        },
+        "ghcr.io/devcontainers/features/common-utils:2": {},
+        "ghcr.io/devcontainers/features/git:1": {}
+    },
 
-    // Configure tool-specific properties.
+    // VS Code-specific customizations
     "customizations": {
-        // Configure properties specific to VS Code.
         "vscode": {
-            // Set *default* container specific settings.json values on container create.
+            // Set container-specific settings.json options
             "settings": {
                 "python.defaultInterpreterPath": "/usr/local/bin/python",
                 "python.linting.enabled": true,
                 "python.linting.pylintEnabled": true,
-                "python.formatting.autopep8Path": "/usr/local/py-utils/bin/autopep8",
                 "python.formatting.blackPath": "/usr/local/py-utils/bin/black",
-                "python.formatting.yapfPath": "/usr/local/py-utils/bin/yapf",
-                "python.linting.banditPath": "/usr/local/py-utils/bin/bandit",
-                "python.linting.flake8Path": "/usr/local/py-utils/bin/flake8",
-                "python.linting.mypyPath": "/usr/local/py-utils/bin/mypy",
-                "python.linting.pycodestylePath": "/usr/local/py-utils/bin/pycodestyle",
-                "python.linting.pydocstylePath": "/usr/local/py-utils/bin/pydocstyle",
-                "python.linting.pylintPath": "/usr/local/py-utils/bin/pylint"
+                "python.linting.flake8Path": "/usr/local/py-utils/bin/flake8"
             },
-
-            // Add the IDs of extensions you want installed when the container is created.
+            // Pre-install useful extensions for Python development
             "extensions": [
-                "streetsidesoftware.code-spell-checker",
                 "ms-python.python",
                 "ms-python.vscode-pylance",
                 "ms-python.isort",
-                "njpwerner.autodocstring"
+                "njpwerner.autodocstring",
+                "streetsidesoftware.code-spell-checker"
             ]
         }
     },
 
-    // Use 'portsAttributes' to set default properties for specific forwarded ports.
-    // More info: https://containers.dev/implementors/json_reference/#port-attributes
+    // Port configuration to forward and auto-open in browser if necessary
     "portsAttributes": {
         "8501": {
             "label": "Streamlit - Groq MoA",
@@ -72,10 +69,9 @@ Here's an example of a devcontainer.json:
         }
     },
 
-    // https://containers.dev/implementors/json_reference/#lifecycle-scripts
+    // Commands to run after the container is created
     "postCreateCommand": "pip3 install -r requirements.txt",
-    "postAttachCommand": "streamlit run app.py"
 
+    // Command to run when VS Code attaches to the container
+    "postAttachCommand": "streamlit run app.py"
 }
-```
-Your goal is to deliver the most logical, secure, efficient, and well-documented devcontainer.json file.

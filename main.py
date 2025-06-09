@@ -8,10 +8,9 @@ from supabase_client import supabase
 
 from helpers.openai_helpers import setup_azure_openai, setup_instructor
 from helpers.github_helpers import fetch_repo_context, check_url_exists
-from helpers.devcontainer_helpers import generate_devcontainer_json, validate_devcontainer_json
+from helpers.devcontainer_helpers import generate_devcontainer_json
 from helpers.token_helpers import count_tokens, truncate_to_token_limit
 from models import DevContainer
-from schemas import DevContainerModel
 from content import *
 
 # Set up logging
@@ -67,23 +66,16 @@ hdrs = [
     Link(rel="stylesheet", href="/css/main.css"),
 ]
 
-# Initialize FastHTML app
-app, rt = fast_app(
-    hdrs=hdrs,
-    live=True,
-    debug=True
-)
+app, rt = fast_app(hdrs=hdrs, live=True, debug=True)
 
-scripts = (
-    Script(src="/js/main.js"),
-)
+scripts = (Script(src="/js/main.js"),)
 
 from fastcore.xtras import timed_cache
 
-# Main page composition
 @timed_cache(seconds=60)
 def home():
-    return (Title(f"DevContainer.ai - {description}"),
+    return (
+        Title(f"DevContainer.ai - {description}"),
         Main(
             hero_section(),
             generator_section(),
@@ -93,10 +85,11 @@ def home():
             examples_section(),
             faq_section(),
             cta_section(),
-            footer_section()),
-        *scripts)
+            footer_section()
+        ),
+        *scripts
+    )
 
-# Define routes
 @rt("/")
 async def get():
     return home()
@@ -104,39 +97,34 @@ async def get():
 @rt("/generate", methods=["post"])
 async def post(repo_url: str, regenerate: bool = False):
     logging.info(f"Generating devcontainer.json for: {repo_url}")
-
-    # Normalize the repo_url by stripping trailing slashes
     repo_url = repo_url.rstrip('/')
 
     try:
         exists, existing_record = check_url_exists(repo_url)
-        logging.info(f"URL check result: exists={exists}, existing_record={existing_record}")
+        logging.info(f"URL exists: {exists}")
 
         repo_context, existing_devcontainer, devcontainer_url = fetch_repo_context(repo_url)
         logging.info(f"Fetched repo context. Existing devcontainer: {'Yes' if existing_devcontainer else 'No'}")
-        logging.info(f"Devcontainer URL: {devcontainer_url}")
 
         if exists and not regenerate:
-            logging.info(f"URL already exists in database. Returning existing devcontainer_json for: {repo_url}")
             devcontainer_json = existing_record['devcontainer_json']
-            generated = existing_record['generated']
             source = "database"
             url = existing_record['devcontainer_url']
+            generated = existing_record['generated']
         else:
-            devcontainer_json, url = generate_devcontainer_json(instructor_client, repo_url, repo_context, devcontainer_url, regenerate=regenerate)
-            generated = True
+            devcontainer_json, url = generate_devcontainer_json(
+                instructor_client, repo_url, repo_context, devcontainer_url, regenerate=regenerate
+            )
             source = "generated" if url is None else "repository"
-
+            generated = True
 
         if not exists or regenerate:
-            logging.info("Saving to database...")
+            logging.info("Saving to Supabase database...")
             try:
                 if hasattr(openai_client.embeddings, "create"):
                     embedding_model = os.getenv("EMBEDDING", "text-embedding-ada-002")
                     max_tokens = int(os.getenv("EMBEDDING_MODEL_MAX_TOKENS", 8192))
-
                     truncated_context = truncate_to_token_limit(repo_context, embedding_model, max_tokens)
-
                     embedding = openai_client.embeddings.create(input=truncated_context, model=embedding_model).data[0].embedding
                     embedding_json = json.dumps(embedding)
                 else:
@@ -151,20 +139,17 @@ async def post(repo_url: str, regenerate: bool = False):
                     model=os.getenv("MODEL"),
                     embedding=embedding_json,
                     generated=generated,
-                    created_at=datetime.utcnow().isoformat()  # Ensure this is a string
+                    created_at=datetime.utcnow().isoformat()
                 )
 
-                # Convert the Pydantic model to a dictionary and handle datetime serialization
                 devcontainer_dict = json.loads(new_devcontainer.json(exclude_unset=True))
-
-                result = supabase.table("devcontainers").insert(devcontainer_dict).execute()
-                logging.info(f"Successfully saved to database with devcontainer_url: {devcontainer_url}")
-            except Exception as e:
-                logging.error(f"Error while saving to database: {str(e)}")
-                raise
+                supabase.table("devcontainers").insert(devcontainer_dict).execute()
+                logging.info("Saved devcontainer successfully.")
+            except Exception as db_err:
+                logging.error(f"Failed to save to Supabase: {str(db_err)}")
 
         return Div(
-            Article(f"Devcontainer.json {'found in ' + source if source in ['database', 'repository'] else 'generated'}"),
+            Article(f"Devcontainer.json {'found in ' + source if source else 'generated'}"),
             caution_section(),
             Pre(
                 Code(devcontainer_json, id="devcontainer-code", cls="overflow-auto"),
@@ -172,7 +157,7 @@ async def post(repo_url: str, regenerate: bool = False):
                     Button(
                         Img(cls="w-4 h-4", src="assets/icons/copy-icon.svg", alt="Copy"),
                         cls="icon-button copy-button",
-                        title="Copy to clipboard",
+                        title="Copy to clipboard"
                     ),
                     Button(
                         Img(cls="w-4 h-4", src="assets/icons/regenerate.svg", alt="Regenerate"),
@@ -180,7 +165,7 @@ async def post(repo_url: str, regenerate: bool = False):
                         hx_post=f"/generate?regenerate=true&repo_url={repo_url}",
                         hx_target="#result",
                         hx_indicator="#action-text",
-                        title="Regenerate",
+                        title="Regenerate"
                     ),
                     Span(cls="action-text", id="action-text"),
                     cls="button-group"
@@ -189,19 +174,19 @@ async def post(repo_url: str, regenerate: bool = False):
             )
         )
     except Exception as e:
-        logging.error(f"An error occurred: {str(e)}", exc_info=True)
+        logging.error(f"Unhandled exception in /generate: {e}", exc_info=True)
         return Div(H2("Error"), P(f"An error occurred: {str(e)}"))
+
 
 @rt("/manifesto")
 async def get():
     return manifesto_page()
 
-# Serve static files
 @rt("/{fname:path}.{ext:static}")
-async def get(fname:str, ext:str):
-    return FileResponse(f'{fname}.{ext}')
+async def get(fname: str, ext: str):
+    return FileResponse(f"{fname}.{ext}")
 
-# Initialize clients
+# Initialize OpenAI clients
 if check_env_vars():
     openai_client = setup_azure_openai()
     instructor_client = setup_instructor(openai_client)

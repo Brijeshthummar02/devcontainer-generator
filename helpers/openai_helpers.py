@@ -31,3 +31,11 @@ def check_env_vars():
         )
         return False
     return True
+
+def get_embedding(text: str):
+    client = setup_azure_openai()
+    response = client.embeddings.create(
+        input=text,
+        model="text-embedding-3-small"  # or use your Azure-deployed embedding model
+    )
+    return response.data[0].embedding
